@@ -1,6 +1,6 @@
 <?php
 
-function gpt_encode($text) 
+function gpt_encode($text)
 {
     $bpe_tokens = array();
     if(empty($text))
@@ -48,7 +48,7 @@ function gpt_encode($text)
         }
     }
     $bpe_ranks = gpt_dictZip($bpe_merges, range(0, count($bpe_merges) - 1));
-    
+
     $cache = array();
     foreach($matches[0] as $token)
     {
@@ -58,7 +58,7 @@ function gpt_encode($text)
         if(function_exists('mb_strlen'))
         {
             $len = mb_strlen($token, 'UTF-8');
-            for ($i = 0; $i < $len; $i++) 
+            for ($i = 0; $i < $len; $i++)
             {
                 $chars[] = mb_substr($token, $i, 1, 'UTF-8');
             }
@@ -108,7 +108,7 @@ function gpt_my_filter($var)
     return ($var !== NULL && $var !== FALSE && $var !== '');
 }
 
-function gpt_unichr($c) 
+function gpt_unichr($c)
 {
     if (ord($c[0]) >=0 && ord($c[0]) <= 127)
     {
@@ -154,11 +154,11 @@ function gpt_dictZip($x, $y)
     }
     return $result;
 }
-function gpt_get_pairs($word) 
+function gpt_get_pairs($word)
 {
     $pairs = array();
     $prev_char = $word[0];
-    for ($i = 1; $i < count($word); $i++) 
+    for ($i = 1; $i < count($word); $i++)
     {
         $char = $word[$i];
         $pairs[] = array($prev_char, $char);
@@ -166,7 +166,7 @@ function gpt_get_pairs($word)
     }
     return $pairs;
 }
-function gpt_split($str, $len = 1) 
+function gpt_split($str, $len = 1)
 {
     $arr		= [];
     if(function_exists('mb_strlen'))
@@ -178,7 +178,7 @@ function gpt_split($str, $len = 1)
         $length 	= strlen($str);
     }
 
-    for ($i = 0; $i < $length; $i += $len) 
+    for ($i = 0; $i < $length; $i += $len)
     {
         if(function_exists('mb_substr'))
         {
@@ -205,7 +205,7 @@ function gpt_bpe($token, $bpe_ranks, &$cache)
     {
         return $token;
     }
-    while (true) 
+    while (true)
     {
         $minPairs = array();
         foreach($pairs as $pair)
@@ -216,7 +216,7 @@ function gpt_bpe($token, $bpe_ranks, &$cache)
                 $minPairs[$rank] = $pair;
             }
             else
-            { 
+            {
                 $minPairs[10e10] = $pair;
             }
         }
@@ -238,10 +238,10 @@ function gpt_bpe($token, $bpe_ranks, &$cache)
         $second = $bigram[1];
         $new_word = array();
         $i = 0;
-        while ($i < count($word)) 
+        while ($i < count($word))
         {
             $j = gpt_indexOf($word, $first, $i);
-            if ($j === -1) 
+            if ($j === -1)
             {
                 $new_word = array_merge($new_word, array_slice($word, $i, null, true));
                 break;
@@ -264,7 +264,7 @@ function gpt_bpe($token, $bpe_ranks, &$cache)
                 break;
             }
             $i = $j;
-            if ($word[$i] === $first && $i < count($word) - 1 && $word[$i + 1] === $second) 
+            if ($word[$i] === $first && $i < count($word) - 1 && $word[$i + 1] === $second)
             {
                 array_push($new_word, $first . $second);
                 $i = $i + 2;
@@ -280,7 +280,7 @@ function gpt_bpe($token, $bpe_ranks, &$cache)
             break;
         }
         $word = $new_word;
-        if (count($word) === 1) 
+        if (count($word) === 1)
         {
             break;
         }
@@ -311,10 +311,3 @@ function gpt_indexOf($arrax, $searchElement, $fromIndex)
     }
     return -1;
 }
-
-$prompt = "Many words map to one token, but some don't: indivisible. Unicode characters like emojis may be split into many tokens containing the underlying bytes: 🤚🏾 Sequences of characters commonly found next to each other may be grouped together: 1234567890";
-$token_array = gpt_encode($prompt);
-error_log('Token array: ' . print_r($token_array, true));
-error_log('Count: ' . count($token_array));
-
-?>
