@@ -50,7 +50,6 @@ class Encoder
 
         $cache = [];
         foreach ($matches[0] as $token) {
-            $new_tokens = [];
             $chars = [];
             $token = utf8_encode((string) $token);
             $len = mb_strlen($token, 'UTF-8');
@@ -67,19 +66,12 @@ class Encoder
 
             $new_tokens_bpe = $this->bpe($result_word, $bpe_ranks, $cache);
             $new_tokens_bpe = explode(' ', (string) $new_tokens_bpe);
-            foreach ($new_tokens_bpe as $x) {
-                if (isset($encoder[$x])) {
-                    $new_tokens[$x] = $encoder[$x];
+            foreach ($new_tokens_bpe as $newBpeToken) {
+                $encoded = $encoder[$newBpeToken] ?? $newBpeToken;
+                if (isset($bpe_tokens[$newBpeToken])) {
+                    $bpe_tokens[] = $encoded;
                 } else {
-                    $new_tokens[$x] = $x;
-                }
-            }
-
-            foreach ($new_tokens as $ninx => $nval) {
-                if (isset($bpe_tokens[$ninx])) {
-                    $bpe_tokens[] = $nval;
-                } else {
-                    $bpe_tokens[$ninx] = $nval;
+                    $bpe_tokens[$newBpeToken] = $encoded;
                 }
             }
         }
