@@ -4,7 +4,6 @@ namespace Semji\GPT3Tokenizer;
 
 class Encoder
 {
-
     public function encode(string $text)
     {
         if (empty($text)) {
@@ -28,7 +27,6 @@ class Encoder
 
         preg_match_all("#'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+#u", $text, $matches);
         if (!isset($matches[0]) || 0 == (is_countable($matches[0]) ? count($matches[0]) : 0)) {
-
             return [];
         }
 
@@ -82,33 +80,35 @@ class Encoder
         return null !== $var && false !== $var && '' !== $var;
     }
 
-    private function characterToUnicode($character)
+    private function characterToUnicode($characters): int
     {
-        if (ord($character[0]) >= 0 && ord($character[0]) <= 127) {
-            return ord($character[0]);
+        $firstCharacterCode = ord($characters[0]);
+
+        if ($firstCharacterCode <= 127) {
+            return $firstCharacterCode;
         }
 
-        if (ord($character[0]) >= 192 && ord($character[0]) <= 223) {
-            return (ord($character[0]) - 192) * 64 + (ord($character[1]) - 128);
+        if ($firstCharacterCode >= 192 && $firstCharacterCode <= 223) {
+            return ($firstCharacterCode - 192) * 64 + (ord($characters[1]) - 128);
         }
 
-        if (ord($character[0]) >= 224 && ord($character[0]) <= 239) {
-            return (ord($character[0]) - 224) * 4096 + (ord($character[1]) - 128) * 64 + (ord($character[2]) - 128);
+        if ($firstCharacterCode >= 224 && $firstCharacterCode <= 239) {
+            return ($firstCharacterCode - 224) * 4096 + (ord($characters[1]) - 128) * 64 + (ord($characters[2]) - 128);
         }
 
-        if (ord($character[0]) >= 240 && ord($character[0]) <= 247) {
-            return (ord($character[0]) - 240) * 262144 + (ord($character[1]) - 128) * 4096 + (ord($character[2]) - 128) * 64 + (ord($character[3]) - 128);
+        if ($firstCharacterCode >= 240 && $firstCharacterCode <= 247) {
+            return ($firstCharacterCode - 240) * 262144 + (ord($characters[1]) - 128) * 4096 + (ord($characters[2]) - 128) * 64 + (ord($characters[3]) - 128);
         }
 
-        if (ord($character[0]) >= 248 && ord($character[0]) <= 251) {
-            return (ord($character[0]) - 248) * 16_777_216 + (ord($character[1]) - 128) * 262144 + (ord($character[2]) - 128) * 4096 + (ord($character[3]) - 128) * 64 + (ord($character[4]) - 128);
+        if ($firstCharacterCode >= 248 && $firstCharacterCode <= 251) {
+            return ($firstCharacterCode - 248) * 16_777_216 + (ord($characters[1]) - 128) * 262144 + (ord($characters[2]) - 128) * 4096 + (ord($characters[3]) - 128) * 64 + (ord($characters[4]) - 128);
         }
 
-        if (ord($character[0]) >= 252 && ord($character[0]) <= 253) {
-            return (ord($character[0]) - 252) * 1_073_741_824 + (ord($character[1]) - 128) * 16_777_216 + (ord($character[2]) - 128) * 262144 + (ord($character[3]) - 128) * 4096 + (ord($character[4]) - 128) * 64 + (ord($character[5]) - 128);
+        if ($firstCharacterCode >= 252 && $firstCharacterCode <= 253) {
+            return ($firstCharacterCode - 252) * 1_073_741_824 + (ord($characters[1]) - 128) * 16_777_216 + (ord($characters[2]) - 128) * 262144 + (ord($characters[3]) - 128) * 4096 + (ord($characters[4]) - 128) * 64 + (ord($characters[5]) - 128);
         }
 
-        if (ord($character[0]) >= 254 && ord($character[0]) <= 255) {
+        if ($firstCharacterCode >= 254) {
             return 0;
         }
 
@@ -137,7 +137,7 @@ class Encoder
     {
         $pairs = [];
         $previousCharacter = $word[0];
-        $wordCount = is_countable($word) ? count($word) : 0;
+        $wordCount = count($word);
 
         for ($i = 1; $i < $wordCount; ++$i) {
             $char = $word[$i];
@@ -167,9 +167,9 @@ class Encoder
         }
 
         $word = $this->splitWord($token);
-        $initialLength = is_countable($word) ? count($word) : 0;
+        $initialLength = count($word);
         $pairs = $this->buildSymbolPairs($word);
-        if (!$pairs) {
+        if ($pairs === []) {
             return $token;
         }
 
@@ -201,7 +201,7 @@ class Encoder
             $second = $bigram[1];
             $newWord = [];
             $i = 0;
-            while ($i < (is_countable($word) ? count($word) : 0)) {
+            while ($i < count($word)) {
                 $j = $this->indexOf($word, $first, $i);
                 if (-1 === $j) {
                     $newWord = array_merge($newWord, array_slice($word, $i, null, true));
@@ -222,12 +222,12 @@ class Encoder
                 }
 
                 $i = $j;
-                if ($word[$i] === $first && $i < (is_countable($word) ? count($word) : 0) - 1 && $word[$i + 1] === $second) {
+                if ($word[$i] === $first && $i < count($word) - 1 && $word[$i + 1] === $second) {
                     $newWord[] = $first.$second;
                     $i += 2;
                 } else {
                     $newWord[] = $word[$i];
-                    $i += 1;
+                    ++$i;
                 }
             }
 
