@@ -148,25 +148,13 @@ class Encoder
         return $pairs;
     }
 
-    private function splitWord(string $word, $len = 1): array
-    {
-        $splitWord = [];
-        $length = mb_strlen($word, 'UTF-8');
-
-        for ($i = 0; $i < $length; $i += $len) {
-            $splitWord[] = mb_substr($word, $i, $len, 'UTF-8');
-        }
-
-        return $splitWord;
-    }
-
     private function bpe($token, $bpeRanks, &$cache)
     {
         if (array_key_exists($token, $cache)) {
             return $cache[$token];
         }
 
-        $word = $this->splitWord($token);
+        $word = mb_str_split($token, 1, 'UTF-8');
         $initialLength = count($word);
         $pairs = $this->buildSymbolPairs($word);
         if ($pairs === []) {
