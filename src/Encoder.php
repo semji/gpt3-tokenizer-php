@@ -4,35 +4,20 @@ namespace Semji\GPT3Tokenizer;
 
 class Encoder
 {
+    private bool $initialized = false;
     private array $bpeCache = [];
+    private array $rawCharacters = [];
+    private array $encoder = [];
+    private array $bpeRanks = [];
 
-    public function encode(string $text)
+    private function intialize(): void
     {
-        if (empty($text)) {
-            return [];
+        if ($this->initialized) {
+            return;
         }
-
-        $rawCharacters = json_decode(file_get_contents(__DIR__.'/../data/characters.json'), true, 512, JSON_THROW_ON_ERROR);
-        if (empty($rawCharacters)) {
-            return [];
-        }
-
-        $encoder = json_decode(file_get_contents(__DIR__.'/../data/encoder.json'), true, 512, JSON_THROW_ON_ERROR);
-        if (empty($encoder)) {
-            return [];
-        }
-
+        $this->rawCharacters = json_decode(file_get_contents(__DIR__.'/../data/characters.json'), true, 512, JSON_THROW_ON_ERROR);
+        $this->encoder = json_decode(file_get_contents(__DIR__.'/../data/encoder.json'), true, 512, JSON_THROW_ON_ERROR);
         $bpeDictionary = file_get_contents(__DIR__.'/../data/vocab.bpe');
-        if (empty($bpeDictionary)) {
-            return [];
-        }
-
-        preg_match_all("#'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+#u", $text, $matches);
-        if (!isset($matches[0]) || 0 == (is_countable($matches[0]) ? count($matches[0]) : 0)) {
-            return [];
-        }
-
-        $bpeTokens = [];
         $lines = preg_split('#\r\n|\r|\n#', $bpeDictionary);
         $bpeMerges = [];
         $rawDictionaryLines = array_slice($lines, 1, is_countable($lines) ? count($lines) : 0, true);
@@ -44,8 +29,24 @@ class Encoder
             }
         }
 
-        $bpeRanks = $this->buildBpeRanks($bpeMerges);
+        $this->bpeRanks = $this->buildBpeRanks($bpeMerges);
+        $this->initialized = true;
+    }
 
+    public function encode(string $text): array
+    {
+        if (empty($text)) {
+            return [];
+        }
+
+        $this->intialize();
+
+        preg_match_all("#'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+#u", $text, $matches);
+        if (!isset($matches[0]) || 0 == (is_countable($matches[0]) ? count($matches[0]) : 0)) {
+            return [];
+        }
+
+        $bpeTokens = [];
         foreach ($matches[0] as $token) {
             $chars = [];
             $token = utf8_encode((string) $token);
@@ -56,15 +57,15 @@ class Encoder
 
             $resultWord = '';
             foreach ($chars as $char) {
-                if (isset($rawCharacters[$this->characterToUnicode($char)])) {
-                    $resultWord .= $rawCharacters[$this->characterToUnicode($char)];
+                if (isset($this->rawCharacters[$this->characterToUnicode($char)])) {
+                    $resultWord .= $this->rawCharacters[$this->characterToUnicode($char)];
                 }
             }
 
-            $newTokensBpe = $this->bpe($resultWord, $bpeRanks);
+            $newTokensBpe = $this->bpe($resultWord);
             $newTokensBpe = explode(' ', (string) $newTokensBpe);
             foreach ($newTokensBpe as $newBpeToken) {
-                $encoded = $encoder[$newBpeToken] ?? $newBpeToken;
+                $encoded = $this->encoder[$newBpeToken] ?? $newBpeToken;
                 if (isset($bpeTokens[$newBpeToken])) {
                     $bpeTokens[] = $encoded;
                 } else {
@@ -151,7 +152,7 @@ class Encoder
         return $pairs;
     }
 
-    private function bpe(string $token, array $bpeRanks)
+    private function bpe(string $token)
     {
         if (isset($this->bpeCache[$token])) {
             return $this->bpeCache[$token];
@@ -167,8 +168,8 @@ class Encoder
         while (true) {
             $minPairs = [];
             foreach ($pairs as $pair) {
-                if (isset($bpeRanks[$pair[0]][$pair[1]])) {
-                    $rank = $bpeRanks[$pair[0]][$pair[1]];
+                if (isset($this->bpeRanks[$pair[0]][$pair[1]])) {
+                    $rank = $this->bpeRanks[$pair[0]][$pair[1]];
                     $minPairs[$rank] = $pair;
                 } else {
                     $minPairs[10e10] = $pair;
@@ -180,7 +181,7 @@ class Encoder
             $minimumKey = $minPairsKeys[0] ?? null;
 
             $bigram = $minPairs[$minimumKey];
-            if (!isset($bpeRanks[$bigram[0]][$bigram[1]])) {
+            if (!isset($this->bpeRanks[$bigram[0]][$bigram[1]])) {
                 break;
             }
 
