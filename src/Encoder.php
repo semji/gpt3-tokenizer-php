@@ -158,31 +158,29 @@ class Encoder
         $word = mb_str_split($token, 1, 'UTF-8');
         $initialLength = count($word);
         $pairs = $this->buildSymbolPairs($word);
-        if ($pairs === []) {
+        if ([] === $pairs) {
             return $token;
         }
 
         while (true) {
             $minPairs = [];
             foreach ($pairs as $pair) {
-                if (array_key_exists($pair[0].','.$pair[1], $bpeRanks)) {
-                    $rank = $bpeRanks[$pair[0].','.$pair[1]];
+                $key = $pair[0].','.$pair[1];
+                if (isset($bpeRanks[$key])) {
+                    $rank = $bpeRanks[$key];
                     $minPairs[$rank] = $pair;
                 } else {
                     $minPairs[10e10] = $pair;
                 }
             }
 
-            ksort($minPairs);
-            $minimumKey = array_key_first($minPairs);
-            foreach (array_keys($minPairs) as $minPairIndex) {
-                if ($minPairIndex < $minimumKey) {
-                    $minimumKey = $minPairIndex;
-                }
-            }
+            $minPairsKeys = array_keys($minPairs);
+            sort($minPairsKeys, SORT_NUMERIC);
+            $minimumKey = $minPairsKeys[0] ?? null;
 
             $bigram = $minPairs[$minimumKey];
-            if (!array_key_exists($bigram[0].','.$bigram[1], $bpeRanks)) {
+            $bigramKey = $bigram[0].','.$bigram[1];
+            if (!isset($bpeRanks[$bigramKey])) {
                 break;
             }
 
@@ -193,7 +191,7 @@ class Encoder
             while ($i < count($word)) {
                 $j = $this->indexOf($word, $first, $i);
                 if (-1 === $j) {
-                    $newWord = array_merge($newWord, array_slice($word, $i, null, true));
+                    $newWord = [...$newWord, ...array_slice($word, $i, null, true)];
                     break;
                 }
 
@@ -205,7 +203,7 @@ class Encoder
                     $slicer = array_slice($word, $i, $j - $i, true);
                 }
 
-                $newWord = array_merge($newWord, $slicer);
+                $newWord = [...$newWord, ...$slicer];
                 if (count($newWord) > $initialLength) {
                     break;
                 }
