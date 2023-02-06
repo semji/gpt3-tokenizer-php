@@ -6,7 +6,7 @@ use PHPUnit\Framework\TestCase;
 
 class EncoderTest extends TestCase
 {
-    public function testEncode()
+    public function testEncode(): void
     {
         $encoder = new Encoder();
 
