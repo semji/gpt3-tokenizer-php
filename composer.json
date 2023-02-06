@@ -1,6 +1,6 @@
 {
-    "name": "semji/gpt-3-encoder-php",
-    "description": "PHP BPE Text Encoder for GPT-2 / GPT-3",
+    "name": "semji/gpt-3-tokenizer-php",
+    "description": "PHP Text Tokenizer for GPT models",
     "type": "library",
     "license": "MIT",
     "authors": [

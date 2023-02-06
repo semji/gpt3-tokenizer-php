@@ -1,8 +1,12 @@
-# GPT-3-Encoder-PHP
-PHP BPE Text Encoder for GPT-2 / GPT-3
+# GPT3 tokenizer
+
+PHP Text Tokenizer for GPT models
 
 ## About
-Just a copy of https://github.com/CodeRevolutionPlugins/GPT-3-Encoder-PHP to fit our usage
+
+A PHP toolkit to tokenize text like GPT family of models process it.
+
+Forked from https://github.com/CodeRevolutionPlugins/GPT-3-Encoder-PHP to fit our usage, fix bugs and add unit testing.
 
 ## Usage
 
