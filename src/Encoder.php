@@ -44,7 +44,7 @@ class Encoder
             }
         }
 
-        $bpeRanks = $this->dictZip($bpeMerges, range(0, count($bpeMerges) - 1));
+        $bpeRanks = $this->buildBpeRanks($bpeMerges);
 
         foreach ($matches[0] as $token) {
             $chars = [];
@@ -116,15 +116,17 @@ class Encoder
         return 0;
     }
 
-    private function dictZip($x, $y)
+    private function buildBpeRanks(array $bpes): array
     {
         $result = [];
-        $cnt = 0;
-        foreach ($x as $i) {
-            if (isset($i[1]) && isset($i[0])) {
-                $result[$i[0].','.$i[1]] = $cnt;
-                ++$cnt;
+        $rank = 0;
+        foreach ($bpes as $bpe) {
+            if (!isset($bpe[1], $bpe[0])) {
+                continue;
             }
+
+            $result[$bpe[0]][$bpe[1]] = $rank;
+            ++$rank;
         }
 
         return $result;
@@ -165,9 +167,8 @@ class Encoder
         while (true) {
             $minPairs = [];
             foreach ($pairs as $pair) {
-                $key = $pair[0].','.$pair[1];
-                if (isset($bpeRanks[$key])) {
-                    $rank = $bpeRanks[$key];
+                if (isset($bpeRanks[$pair[0]][$pair[1]])) {
+                    $rank = $bpeRanks[$pair[0]][$pair[1]];
                     $minPairs[$rank] = $pair;
                 } else {
                     $minPairs[10e10] = $pair;
@@ -179,8 +180,7 @@ class Encoder
             $minimumKey = $minPairsKeys[0] ?? null;
 
             $bigram = $minPairs[$minimumKey];
-            $bigramKey = $bigram[0].','.$bigram[1];
-            if (!isset($bpeRanks[$bigramKey])) {
+            if (!isset($bpeRanks[$bigram[0]][$bigram[1]])) {
                 break;
             }
 
@@ -240,14 +240,12 @@ class Encoder
     {
         foreach ($array as $index => $value) {
             if ($index < $fromIndex) {
-//                ++$index;
                 continue;
             }
 
             if ($value == $searchElement) {
                 return $index;
             }
-//            ++$index;
         }
 
         return -1;
