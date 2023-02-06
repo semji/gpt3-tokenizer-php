@@ -136,13 +136,13 @@ class Encoder
     private function buildSymbolPairs(array $word): array
     {
         $pairs = [];
-        $previousCharacter = $word[0];
-        $wordCount = count($word);
+        $previousPart = null;
+        foreach ($word as $i => $part) {
+            if ($i > 0) {
+                $pairs[] = [$previousPart, $part];
+            }
 
-        for ($i = 1; $i < $wordCount; ++$i) {
-            $char = $word[$i];
-            $pairs[] = [$previousCharacter, $char];
-            $previousCharacter = $char;
+            $previousPart = $part;
         }
 
         return $pairs;
