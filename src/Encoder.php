@@ -41,7 +41,7 @@ class Encoder
         foreach ($bpe_merges_temp as $bmt) {
             $split_bmt = preg_split('#(\s+)#', (string) $bmt);
             $split_bmt = array_filter($split_bmt, $this->my_filter(...));
-            if ($split_bmt !== []) {
+            if ([] !== $split_bmt) {
                 $bpe_merges[] = $split_bmt;
             }
         }
@@ -135,7 +135,8 @@ class Encoder
     {
         $pairs = [];
         $prev_char = $word[0];
-        for ($i = 1; $i < (is_countable($word) ? count($word) : 0); ++$i) {
+        $wordCount = count($word);
+        for ($i = 1; $i < (is_countable($word) ? $wordCount : 0); ++$i) {
             $char = $word[$i];
             $pairs[] = [$prev_char, $char];
             $prev_char = $char;
@@ -182,7 +183,7 @@ class Encoder
 
             ksort($minPairs);
             $min_key = array_key_first($minPairs);
-            foreach ($minPairs as $mpi => $mp) {
+            foreach (array_keys($minPairs) as $mpi) {
                 if ($mpi < $min_key) {
                     $min_key = $mpi;
                 }
@@ -219,11 +220,11 @@ class Encoder
 
                 $i = $j;
                 if ($word[$i] === $first && $i < (is_countable($word) ? count($word) : 0) - 1 && $word[$i + 1] === $second) {
-                    array_push($new_word, $first.$second);
-                    $i = $i + 2;
+                    $new_word[] = $first.$second;
+                    $i += 2;
                 } else {
-                    array_push($new_word, $word[$i]);
-                    $i = $i + 1;
+                    $new_word[] = $word[$i];
+                    $i += 1;
                 }
             }
 
