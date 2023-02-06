@@ -4,6 +4,8 @@ namespace Semji\GPT3Tokenizer;
 
 class Encoder
 {
+    private array $bpeCache = [];
+
     public function encode(string $text)
     {
         if (empty($text)) {
@@ -44,7 +46,6 @@ class Encoder
 
         $bpeRanks = $this->dictZip($bpeMerges, range(0, count($bpeMerges) - 1));
 
-        $cache = [];
         foreach ($matches[0] as $token) {
             $chars = [];
             $token = utf8_encode((string) $token);
@@ -60,7 +61,7 @@ class Encoder
                 }
             }
 
-            $newTokensBpe = $this->bpe($resultWord, $bpeRanks, $cache);
+            $newTokensBpe = $this->bpe($resultWord, $bpeRanks);
             $newTokensBpe = explode(' ', (string) $newTokensBpe);
             foreach ($newTokensBpe as $newBpeToken) {
                 $encoded = $encoder[$newBpeToken] ?? $newBpeToken;
@@ -148,10 +149,10 @@ class Encoder
         return $pairs;
     }
 
-    private function bpe($token, $bpeRanks, &$cache)
+    private function bpe(string $token, array $bpeRanks)
     {
-        if (array_key_exists($token, $cache)) {
-            return $cache[$token];
+        if (isset($this->bpeCache[$token])) {
+            return $this->bpeCache[$token];
         }
 
         $word = mb_str_split($token, 1, 'UTF-8');
@@ -232,7 +233,7 @@ class Encoder
         }
 
         $word = implode(' ', $word);
-        $cache[$token] = $word;
+        $this->bpeCache[$token] = $word;
 
         return $word;
     }
