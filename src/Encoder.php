@@ -4,51 +4,79 @@ namespace Semji\GPT3Tokenizer;
 
 class Encoder
 {
-    public function encode(string $text)
+    private bool $initialized = false;
+
+    /** @var array<string>  */
+    private array $bpeCache = [];
+
+    /** @var array<string>  */
+    private array $rawCharacters = [];
+
+    /** @var array<string>  */
+    private array $encoder = [];
+
+    /** @var array<array<int>>  */
+    private array $bpeRanks = [];
+
+    private function initialize(): void
     {
-        $bpe_tokens = [];
-        if (empty($text)) {
-            return $bpe_tokens;
+        if ($this->initialized) {
+            return;
+        }
+        $rawCharacters = file_get_contents(__DIR__.'/../data/characters.json');
+        if (false === $rawCharacters) {
+            throw new \RuntimeException("Unable to load characters.json");
+        }
+        $this->rawCharacters = json_decode($rawCharacters, true, 512, JSON_THROW_ON_ERROR);
+
+        $encoder = file_get_contents(__DIR__.'/../data/encoder.json');
+        if (false === $encoder) {
+            throw new \RuntimeException("Unable to load encoder.json");
+        }
+        $this->encoder = json_decode($encoder, true, 512, JSON_THROW_ON_ERROR);
+
+        $bpeDictionary = file_get_contents(__DIR__.'/../data/vocab.bpe');
+        if (false === $bpeDictionary) {
+            throw new \RuntimeException("Unable to load vocab.bpe");
         }
 
-        $raw_chars = file_get_contents(__DIR__.'/../data/characters.json');
-        $byte_encoder = json_decode($raw_chars, true, 512, JSON_THROW_ON_ERROR);
-        if (empty($byte_encoder)) {
-            return $bpe_tokens;
+        $lines = preg_split('#\r\n|\r|\n#', $bpeDictionary);
+        if (false === $lines) {
+            throw new \RuntimeException("Unable to split vocab.bpe");
         }
 
-        $rencoder = file_get_contents(__DIR__.'/../data/encoder.json');
-        $encoder = json_decode($rencoder, true, 512, JSON_THROW_ON_ERROR);
-        if (empty($encoder)) {
-            return $bpe_tokens;
-        }
-
-        $bpe_file = file_get_contents(__DIR__.'/../data/vocab.bpe');
-        if (empty($bpe_file)) {
-            return $bpe_tokens;
-        }
-
-        preg_match_all("#'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+#u", $text, $matches);
-        if (!isset($matches[0]) || 0 == (is_countable($matches[0]) ? count($matches[0]) : 0)) {
-            error_log('Failed to match string: '.$text);
-
-            return $bpe_tokens;
-        }
-
-        $lines = preg_split('#\r\n|\r|\n#', $bpe_file);
-        $bpe_merges = [];
-        $bpe_merges_temp = array_slice($lines, 1, is_countable($lines) ? count($lines) : 0, true);
-        foreach ($bpe_merges_temp as $bmt) {
-            $split_bmt = preg_split('#(\s+)#', (string) $bmt);
-            $split_bmt = array_filter($split_bmt, $this->my_filter(...));
-            if ([] !== $split_bmt) {
-                $bpe_merges[] = $split_bmt;
+        $bpeMerges = [];
+        $rawDictionaryLines = array_slice($lines, 1, count($lines), true);
+        foreach ($rawDictionaryLines as $rawDictionaryLine) {
+            $splitLine = preg_split('#(\s+)#', (string) $rawDictionaryLine);
+            if (false === $splitLine) {
+                continue;
+            }
+            $splitLine = array_filter($splitLine, $this->filterEmpty(...));
+            if ([] !== $splitLine) {
+                $bpeMerges[] = $splitLine;
             }
         }
 
-        $bpe_ranks = $this->dictZip($bpe_merges, range(0, count($bpe_merges) - 1));
+        $this->bpeRanks = $this->buildBpeRanks($bpeMerges);
+        $this->initialized = true;
+    }
 
-        $cache = [];
+    /** @return array<string> */
+    public function encode(string $text): array
+    {
+        if (empty($text)) {
+            return [];
+        }
+
+        $this->initialize();
+
+        preg_match_all("#'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+#u", $text, $matches);
+        if (!isset($matches[0]) || 0 == (is_countable($matches[0]) ? count($matches[0]) : 0)) {
+            return [];
+        }
+
+        $bpeTokens = [];
         foreach ($matches[0] as $token) {
             $chars = [];
             $token = utf8_encode((string) $token);
@@ -57,151 +85,153 @@ class Encoder
                 $chars[] = mb_substr($token, $i, 1, 'UTF-8');
             }
 
-            $result_word = '';
+            $resultWord = '';
             foreach ($chars as $char) {
-                if (isset($byte_encoder[$this->unichr($char)])) {
-                    $result_word .= $byte_encoder[$this->unichr($char)];
+                if (isset($this->rawCharacters[$this->characterToUnicode($char)])) {
+                    $resultWord .= $this->rawCharacters[$this->characterToUnicode($char)];
                 }
             }
 
-            $new_tokens_bpe = $this->bpe($result_word, $bpe_ranks, $cache);
-            $new_tokens_bpe = explode(' ', (string) $new_tokens_bpe);
-            foreach ($new_tokens_bpe as $newBpeToken) {
-                $encoded = $encoder[$newBpeToken] ?? $newBpeToken;
-                if (isset($bpe_tokens[$newBpeToken])) {
-                    $bpe_tokens[] = $encoded;
+            $newTokensBpe = $this->bpe($resultWord);
+            $newTokensBpe = explode(' ', (string) $newTokensBpe);
+            foreach ($newTokensBpe as $newBpeToken) {
+                $encoded = $this->encoder[$newBpeToken] ?? $newBpeToken;
+                if (isset($bpeTokens[$newBpeToken])) {
+                    $bpeTokens[] = $encoded;
                 } else {
-                    $bpe_tokens[$newBpeToken] = $encoded;
+                    $bpeTokens[$newBpeToken] = $encoded;
                 }
             }
         }
 
-        return array_values($bpe_tokens);
+        return array_values($bpeTokens);
     }
 
-    private function my_filter($var)
+    private function filterEmpty(mixed $var): bool
     {
         return null !== $var && false !== $var && '' !== $var;
     }
 
-    private function unichr($c)
+    private function characterToUnicode(string $characters): int
     {
-        if (ord($c[0]) >= 0 && ord($c[0]) <= 127) {
-            return ord($c[0]);
+        $firstCharacterCode = ord($characters[0]);
+
+        if ($firstCharacterCode <= 127) {
+            return $firstCharacterCode;
         }
 
-        if (ord($c[0]) >= 192 && ord($c[0]) <= 223) {
-            return (ord($c[0]) - 192) * 64 + (ord($c[1]) - 128);
+        if ($firstCharacterCode >= 192 && $firstCharacterCode <= 223) {
+            return ($firstCharacterCode - 192) * 64 + (ord($characters[1]) - 128);
         }
 
-        if (ord($c[0]) >= 224 && ord($c[0]) <= 239) {
-            return (ord($c[0]) - 224) * 4096 + (ord($c[1]) - 128) * 64 + (ord($c[2]) - 128);
+        if ($firstCharacterCode >= 224 && $firstCharacterCode <= 239) {
+            return ($firstCharacterCode - 224) * 4096 + (ord($characters[1]) - 128) * 64 + (ord($characters[2]) - 128);
         }
 
-        if (ord($c[0]) >= 240 && ord($c[0]) <= 247) {
-            return (ord($c[0]) - 240) * 262144 + (ord($c[1]) - 128) * 4096 + (ord($c[2]) - 128) * 64 + (ord($c[3]) - 128);
+        if ($firstCharacterCode >= 240 && $firstCharacterCode <= 247) {
+            return ($firstCharacterCode - 240) * 262144 + (ord($characters[1]) - 128) * 4096 + (ord($characters[2]) - 128) * 64 + (ord($characters[3]) - 128);
         }
 
-        if (ord($c[0]) >= 248 && ord($c[0]) <= 251) {
-            return (ord($c[0]) - 248) * 16_777_216 + (ord($c[1]) - 128) * 262144 + (ord($c[2]) - 128) * 4096 + (ord($c[3]) - 128) * 64 + (ord($c[4]) - 128);
+        if ($firstCharacterCode >= 248 && $firstCharacterCode <= 251) {
+            return ($firstCharacterCode - 248) * 16_777_216 + (ord($characters[1]) - 128) * 262144 + (ord($characters[2]) - 128) * 4096 + (ord($characters[3]) - 128) * 64 + (ord($characters[4]) - 128);
         }
 
-        if (ord($c[0]) >= 252 && ord($c[0]) <= 253) {
-            return (ord($c[0]) - 252) * 1_073_741_824 + (ord($c[1]) - 128) * 16_777_216 + (ord($c[2]) - 128) * 262144 + (ord($c[3]) - 128) * 4096 + (ord($c[4]) - 128) * 64 + (ord($c[5]) - 128);
+        if ($firstCharacterCode >= 252 && $firstCharacterCode <= 253) {
+            return ($firstCharacterCode - 252) * 1_073_741_824 + (ord($characters[1]) - 128) * 16_777_216 + (ord($characters[2]) - 128) * 262144 + (ord($characters[3]) - 128) * 4096 + (ord($characters[4]) - 128) * 64 + (ord($characters[5]) - 128);
         }
 
-        if (ord($c[0]) >= 254 && ord($c[0]) <= 255) {
+        if ($firstCharacterCode >= 254) {
             return 0;
         }
 
         return 0;
     }
 
-    private function dictZip($x, $y)
+    /**
+     * @param array<array<mixed>> $bpes
+     *
+     * @return array<array<int>>
+     */
+    private function buildBpeRanks(array $bpes): array
     {
         $result = [];
-        $cnt = 0;
-        foreach ($x as $i) {
-            if (isset($i[1]) && isset($i[0])) {
-                $result[$i[0].','.$i[1]] = $cnt;
-                ++$cnt;
+        $rank = 0;
+        foreach ($bpes as $bpe) {
+            if (!isset($bpe[1], $bpe[0])) {
+                continue;
             }
+
+            $result[$bpe[0]][$bpe[1]] = $rank;
+            ++$rank;
         }
 
         return $result;
     }
 
-    private function get_pairs($word)
+    /**
+     * Return set of symbol pairs in a word.
+     * Word is represented as tuple of symbols (symbols being variable-length strings).
+     *
+     * @param array<int, string> $word
+     *
+     * @return mixed[]
+     */
+    private function buildSymbolPairs(array $word): array
     {
         $pairs = [];
-        $prev_char = $word[0];
-        $wordCount = count($word);
-        for ($i = 1; $i < (is_countable($word) ? $wordCount : 0); ++$i) {
-            $char = $word[$i];
-            $pairs[] = [$prev_char, $char];
-            $prev_char = $char;
+        $previousPart = null;
+        foreach ($word as $i => $part) {
+            if ($i > 0) {
+                $pairs[] = [$previousPart, $part];
+            }
+
+            $previousPart = $part;
         }
 
         return $pairs;
     }
 
-    private function split($str, $len = 1)
+    private function bpe(string $token): string
     {
-        $arr = [];
-        $length = mb_strlen((string) $str, 'UTF-8');
-
-        for ($i = 0; $i < $length; $i += $len) {
-            $arr[] = mb_substr((string) $str, $i, $len, 'UTF-8');
+        if (isset($this->bpeCache[$token])) {
+            return $this->bpeCache[$token];
         }
 
-        return $arr;
-    }
-
-    private function bpe($token, $bpe_ranks, &$cache)
-    {
-        if (array_key_exists($token, $cache)) {
-            return $cache[$token];
-        }
-
-        $word = $this->split($token);
-        $init_len = is_countable($word) ? count($word) : 0;
-        $pairs = $this->get_pairs($word);
-        if (!$pairs) {
+        $word = mb_str_split($token, 1, 'UTF-8');
+        $initialLength = count($word);
+        $pairs = $this->buildSymbolPairs($word);
+        if ([] === $pairs) {
             return $token;
         }
 
         while (true) {
             $minPairs = [];
             foreach ($pairs as $pair) {
-                if (array_key_exists($pair[0].','.$pair[1], $bpe_ranks)) {
-                    $rank = $bpe_ranks[$pair[0].','.$pair[1]];
+                if (isset($this->bpeRanks[$pair[0]][$pair[1]])) {
+                    $rank = $this->bpeRanks[$pair[0]][$pair[1]];
                     $minPairs[$rank] = $pair;
                 } else {
                     $minPairs[10e10] = $pair;
                 }
             }
 
-            ksort($minPairs);
-            $min_key = array_key_first($minPairs);
-            foreach (array_keys($minPairs) as $mpi) {
-                if ($mpi < $min_key) {
-                    $min_key = $mpi;
-                }
-            }
+            $minPairsKeys = array_keys($minPairs);
+            sort($minPairsKeys, SORT_NUMERIC);
+            $minimumKey = $minPairsKeys[0] ?? null;
 
-            $bigram = $minPairs[$min_key];
-            if (!array_key_exists($bigram[0].','.$bigram[1], $bpe_ranks)) {
+            $bigram = $minPairs[$minimumKey];
+            if (!isset($this->bpeRanks[$bigram[0]][$bigram[1]])) {
                 break;
             }
 
             $first = $bigram[0];
             $second = $bigram[1];
-            $new_word = [];
+            $newWord = [];
             $i = 0;
-            while ($i < (is_countable($word) ? count($word) : 0)) {
+            while ($i < count($word)) {
                 $j = $this->indexOf($word, $first, $i);
                 if (-1 === $j) {
-                    $new_word = array_merge($new_word, array_slice($word, $i, null, true));
+                    $newWord = [...$newWord, ...array_slice($word, $i, null, true)];
                     break;
                 }
 
@@ -213,53 +243,52 @@ class Encoder
                     $slicer = array_slice($word, $i, $j - $i, true);
                 }
 
-                $new_word = array_merge($new_word, $slicer);
-                if (count($new_word) > $init_len) {
+                $newWord = [...$newWord, ...$slicer];
+                if (count($newWord) > $initialLength) {
                     break;
                 }
 
                 $i = $j;
-                if ($word[$i] === $first && $i < (is_countable($word) ? count($word) : 0) - 1 && $word[$i + 1] === $second) {
-                    $new_word[] = $first.$second;
+                if ($word[$i] === $first && $i < count($word) - 1 && $word[$i + 1] === $second) {
+                    $newWord[] = $first.$second;
                     $i += 2;
                 } else {
-                    $new_word[] = $word[$i];
-                    $i += 1;
+                    $newWord[] = $word[$i];
+                    ++$i;
                 }
             }
 
-            if ($word == $new_word) {
+            if ($word === $newWord) {
                 break;
             }
 
-            $word = $new_word;
+            $word = $newWord;
             if (1 === count($word)) {
                 break;
-            } else {
-                $pairs = $this->get_pairs($word);
             }
+
+            $pairs = $this->buildSymbolPairs($word);
         }
 
         $word = implode(' ', $word);
-        $cache[$token] = $word;
+        $this->bpeCache[$token] = $word;
 
         return $word;
     }
 
-    private function indexOf($array, $searchElement, $fromIndex)
+    /**
+     * @param array<int, string> $array
+     */
+    private function indexOf(array $array, string $searchElement, int $fromIndex): int
     {
-        $index = 0;
         foreach ($array as $index => $value) {
             if ($index < $fromIndex) {
-                ++$index;
                 continue;
             }
 
             if ($value == $searchElement) {
                 return $index;
             }
-
-            ++$index;
         }
 
         return -1;
