@@ -6,16 +6,16 @@ class Encoder
 {
     private bool $initialized = false;
 
-    /** @var array<string>  */
+    /** @var array<string> */
     private array $bpeCache = [];
 
-    /** @var array<string>  */
+    /** @var array<string> */
     private array $rawCharacters = [];
 
-    /** @var array<string>  */
+    /** @var array<string> */
     private array $encoder = [];
 
-    /** @var array<array<int>>  */
+    /** @var array<array<int>> */
     private array $bpeRanks = [];
 
     private function initialize(): void
@@ -25,24 +25,24 @@ class Encoder
         }
         $rawCharacters = file_get_contents(__DIR__.'/../data/characters.json');
         if (false === $rawCharacters) {
-            throw new \RuntimeException("Unable to load characters.json");
+            throw new \RuntimeException('Unable to load characters.json');
         }
         $this->rawCharacters = json_decode($rawCharacters, true, 512, JSON_THROW_ON_ERROR);
 
         $encoder = file_get_contents(__DIR__.'/../data/encoder.json');
         if (false === $encoder) {
-            throw new \RuntimeException("Unable to load encoder.json");
+            throw new \RuntimeException('Unable to load encoder.json');
         }
         $this->encoder = json_decode($encoder, true, 512, JSON_THROW_ON_ERROR);
 
         $bpeDictionary = file_get_contents(__DIR__.'/../data/vocab.bpe');
         if (false === $bpeDictionary) {
-            throw new \RuntimeException("Unable to load vocab.bpe");
+            throw new \RuntimeException('Unable to load vocab.bpe');
         }
 
         $lines = preg_split('#\r\n|\r|\n#', $bpeDictionary);
         if (false === $lines) {
-            throw new \RuntimeException("Unable to split vocab.bpe");
+            throw new \RuntimeException('Unable to split vocab.bpe');
         }
 
         $bpeMerges = [];
@@ -78,22 +78,19 @@ class Encoder
 
         $bpeTokens = [];
         foreach ($matches[0] as $token) {
-            $chars = [];
             $token = utf8_encode((string) $token);
-            $len = mb_strlen($token, 'UTF-8');
-            for ($i = 0; $i < $len; ++$i) {
-                $chars[] = mb_substr($token, $i, 1, 'UTF-8');
-            }
+            $characters = mb_str_split($token, 1, 'UTF-8');
 
             $resultWord = '';
-            foreach ($chars as $char) {
-                if (isset($this->rawCharacters[$this->characterToUnicode($char)])) {
-                    $resultWord .= $this->rawCharacters[$this->characterToUnicode($char)];
+            foreach ($characters as $char) {
+                if (!isset($this->rawCharacters[$this->characterToUnicode($char)])) {
+                    continue;
                 }
+                $resultWord .= $this->rawCharacters[$this->characterToUnicode($char)];
             }
 
             $newTokensBpe = $this->bpe($resultWord);
-            $newTokensBpe = explode(' ', (string) $newTokensBpe);
+            $newTokensBpe = explode(' ', $newTokensBpe);
             foreach ($newTokensBpe as $newBpeToken) {
                 $encoded = $this->encoder[$newBpeToken] ?? $newBpeToken;
                 if (isset($bpeTokens[$newBpeToken])) {
@@ -231,19 +228,19 @@ class Encoder
             while ($i < count($word)) {
                 $j = $this->indexOf($word, $first, $i);
                 if (-1 === $j) {
-                    $newWord = [...$newWord, ...array_slice($word, $i, null, true)];
+                    $newWord = [
+                        ...$newWord,
+                        ...array_slice($word, $i, null, true),
+                    ];
                     break;
                 }
 
-                if ($i > $j) {
-                    $slicer = [];
-                } elseif (0 == $j) {
-                    $slicer = [];
-                } else {
-                    $slicer = array_slice($word, $i, $j - $i, true);
-                }
+                $slicer = $i > $j || 0 === $j ? [] : array_slice($word, $i, $j - $i, true);
 
-                $newWord = [...$newWord, ...$slicer];
+                $newWord = [
+                    ...$newWord,
+                    ...$slicer,
+                ];
                 if (count($newWord) > $initialLength) {
                     break;
                 }
@@ -281,16 +278,10 @@ class Encoder
      */
     private function indexOf(array $array, string $searchElement, int $fromIndex): int
     {
-        foreach ($array as $index => $value) {
-            if ($index < $fromIndex) {
-                continue;
-            }
+        $slicedArray = array_slice($array, $fromIndex, preserve_keys: true);
 
-            if ($value == $searchElement) {
-                return $index;
-            }
-        }
+        $indexed = array_search($searchElement, $slicedArray);
 
-        return -1;
+        return false === $indexed ? -1 : $indexed;
     }
 }
